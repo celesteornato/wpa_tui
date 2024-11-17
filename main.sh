@@ -1,11 +1,17 @@
 #!/bin/sh
 
+control_c() {
+    exit
+}
+
+trap control_c SIGINT
+
 main()
 {
   MENU=$(dialog --title "WPA_TUI" \
     --menu "Please Make a choice" 0 0 0 \
       1 "Add a wifi"\
-      2 "Enable/Disable pre-existing wifi networks"\
+      2 "Connect to a wifi"\
       3 "Remove pre-existing wifi networks" 3>&1 1>&2 2>&3 3>&-);
   case $MENU in
     1) add_wifi;;
@@ -39,30 +45,39 @@ add_wifi()
 
   KEY=$( \
     dialog --title "Add a Wifi" \
-      --inputbox "Enter Key type (leave blank for WPA_PSK, \"NONE\" for no passwords):" 0 40 3>&1 1>&2 2>&3 3>&- \
+      --inputbox "Enter Key type (leave blank for WPA-PSK, \"NONE\" for no passwords):" 0 40 3>&1 1>&2 2>&3 3>&- \
   );
   if [ "$KEY" == "" ]; then KEY="WPA-PSK"; fi 
   
   wpa_cli add_network
   echo "wpa_cli set_network $NW_ID 'ssid' '\"$SSID\"'" | sh
 
-  if [ "$KEY" == "WPA-EAP" ]; then 
-    USR=$( \
+  if [ "$KEY" == "NONE" ]; then
+    wpa_cli enable_network $NW_ID
+    main
+    exit;
+  fi
+
+
+  PSK=$( \
     dialog --title "Add a Wifi" \
-        --inputbox "enter your username" 0 0 3>&1 1>&2 2>&3 3>&- \
+      --inputbox "Enter your password" 0 0 3>&1 1>&2 2>&3 3>&- \
+  );
+
+  wpa_cli set_network $NW_ID 'key_mgmt' "$KEY"
+  if [ "$KEY" == "WPA-EAP" ]; then 
+    USR=$(\
+      dialog --title "Add a Wifi" \
+          --inputbox "enter your username" 0 0 3>&1 1>&2 2>&3 3>&- \
     );
     wpa_cli set_network $NW_ID 'eap' 'PEAP'
+    echo "wpa_cli set_network $NW_ID 'password' '\"$PSK\"'" | sh
     echo "wpa_cli set_network $NW_ID 'identity' '\"$USR\"'" | sh
-  fi;
+  fi
 
-  if [ "$KEY" != "NONE" ]; then
-    wpa_cli set_network $NW_ID 'key_mgmt' "$KEY"
-    PSK=$( \
-      dialog --title "Add a Wifi" \
-        --inputbox "Enter your password" 0 0 3>&1 1>&2 2>&3 3>&- \
-    );
+  if [ "KEY" == "WPA-PSK" ]; then
     echo "wpa_cli set_network $NW_ID 'psk' '\"$PSK\"'" | sh
-  fi;
+  fi
 
   wpa_cli enable_network $NW_ID
 
@@ -73,7 +88,8 @@ enable_wifi()
 {
   CHOICES=$( \
     dialog --title "Enable networks" \
-      --inputbox "Enter wifis you want to have enabled $(echo; wpa_cli list_networks | grep "^[0-9]")" 0 0 "" 3>&1 1>&2 2>&3 3>&-);
+      --inputbox "Enter ID of wifi you want to connect to $(echo; wpa_cli list_networks | grep "^[0-9]")" 0 0 "" 3>&1 1>&2 2>&3 3>&-);
+  if [ "$CHOICES" == "" ]; then main; exit; fi
   wpa_cli disable_network all
   wpa_cli enable_network $CHOICES
   wpa_cli save_config
@@ -85,20 +101,13 @@ remove_wifi()
 {
   CHOICES=$( \
     dialog --title "Remove networks" \
-      --inputbox "Enter wifis you want to have deleted $(wpa_cli list_networks | grep "^[0-9]")" 0 0 "" 3>&1 1>&2 2>&3 3>&-);
+      --inputbox "Enter wifis you want to have deleted $(echo; wpa_cli list_networks | grep "^[0-9]")" 0 0 "" 3>&1 1>&2 2>&3 3>&-);
+  if [ "$CHOICES" == "" ]; then main; exit; fi
   echo $CHOICES | xargs wpa_cli remove_network
   echo $CHOICES | xargs wpa_cli remove_network
   wpa_cli save_config
   wpa_cli reconfigure
   main
-}
-
-connect_wifi()
-{
-  NAME=$(dialog --title "Connecting to wifi" \
-    --menu "Please Make a choice" 0 0 0 \
-      1 "Add a wifi"\
-      2 "Enable/Disable pre-existing wifi networks" 3>&1 1>&2 2>&3 3>&-);
 }
 
 main
