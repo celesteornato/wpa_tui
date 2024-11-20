@@ -12,11 +12,14 @@ main()
     --menu "Please Make a choice" 0 0 0 \
       1 "Add a wifi"\
       2 "Connect to a wifi"\
-      3 "Remove pre-existing wifi networks" 3>&1 1>&2 2>&3 3>&-);
+      3 "Remove pre-existing wifi networks"\
+      4 "(Wifibox) [SUDO] reload wifi" 3>&1 1>&2 2>&3 3>&-);
+      
   case $MENU in
     1) add_wifi;;
     2) enable_wifi;;
     3) remove_wifi;;
+    4) reload_wifi;;
   esac
 }
 
@@ -54,6 +57,7 @@ add_wifi()
 
   if [ "$KEY" == "NONE" ]; then
     wpa_cli enable_network $NW_ID
+    wpa_cli save_config
     main
     exit;
   fi
@@ -80,6 +84,7 @@ add_wifi()
   fi
 
   wpa_cli enable_network $NW_ID
+  wpa_cli save_config 
 
   main
 }
@@ -88,7 +93,7 @@ enable_wifi()
 {
   CHOICES=$( \
     dialog --title "Enable networks" \
-      --inputbox "Enter ID of wifi you want to connect to $(echo; wpa_cli list_networks | grep "^[0-9]")" 0 0 "" 3>&1 1>&2 2>&3 3>&-);
+      --inputbox "Enter ID of wifi you want to connect to $(echo; echo; wpa_cli list_networks | grep "^[0-9]")" 0 0 "" 3>&1 1>&2 2>&3 3>&-);
   if [ "$CHOICES" == "" ]; then main; exit; fi
   wpa_cli disable_network all
   wpa_cli enable_network $CHOICES
@@ -101,13 +106,18 @@ remove_wifi()
 {
   CHOICES=$( \
     dialog --title "Remove networks" \
-      --inputbox "Enter wifis you want to have deleted $(echo; wpa_cli list_networks | grep "^[0-9]")" 0 0 "" 3>&1 1>&2 2>&3 3>&-);
+      --inputbox "Enter wifis you want to have deleted $(echo; echo; wpa_cli list_networks | grep "^[0-9]")" 0 0 "" 3>&1 1>&2 2>&3 3>&-);
   if [ "$CHOICES" == "" ]; then main; exit; fi
   echo $CHOICES | xargs wpa_cli remove_network
   echo $CHOICES | xargs wpa_cli remove_network
   wpa_cli save_config
   wpa_cli reconfigure
   main
+}
+
+reload_wifi()
+{
+  sudo service netif stop && sudo service wifibox restart && sudo service netif start wifibox0
 }
 
 main
